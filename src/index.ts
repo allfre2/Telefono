@@ -2,4 +2,4 @@ export function greet(name: string): string {
   return `Hello, ${name}!`;
 }
 
-export const version = "1.0.0";
+export const version = "0.1.0";
