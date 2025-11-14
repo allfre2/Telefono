@@ -1,0 +1,34 @@
+# Node modules
+node_modules/
+
+# Build artifacts
+dist/
+build/
+lib/
+es/
+umd/
+
+# TypeScript cache
+.tsbuildinfo
+
+# IDE files
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment variables
+.env
+
+# npm package lock file
+package-lock.json
+
+# Yarn lock file
+yarn.lock
+
+# Editor backup files
+*~
+*.bak
+*.swp
