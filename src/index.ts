@@ -1,45 +1,60 @@
 import { Modes, Protocols } from "./domain/call";
 import { CallCommand, CommandTypes } from "./domain/command";
-import { ICallService, TrackHandler, WebRTCService } from "./services/call";
+import { Events } from "./domain/event";
+import { ICallService, WebRTCService } from "./services/call";
 import { DefaultCommandService, ICommandService } from "./services/command";
+import { DefaultEventService, IEventPublisher } from "./services/event";
 import { ISessionService, WebSocketService } from "./services/session";
 import { ConsoleLogger, ILogger, LogLevel } from "./util/logger";
 
+export enum Log {
+    Information = LogLevel.Information,
+    Warnning = LogLevel.Warnning,
+    Error = LogLevel.Error,
+    Debug = LogLevel.Debug,
+}
+
+export class Config {
+    element: any;
+    logLevels: any;
+}
+
 export default class Telefono {
+    config: Config;
+    eventService: IEventPublisher;
     callService: ICallService;
     cmdService: ICommandService;
     sessionService: ISessionService;
     logger: ILogger;
     audioElement: any;
+    isActive: boolean;
 
-    GetTrackHandler(): TrackHandler {
-        let self = this;
-        return (event) => {
-            self.audioElement = document.createElement(event.track.kind);
-            self.audioElement.srcObject = event.streams[0];
-            self.audioElement.autoplay = true;
-            self.audioElement.controls = true;
-            document.body.appendChild(self.audioElement);
-        };
-    }
+    constructor(url: string, config: Config) {
+        this.config = config;
 
-    GetAudioElement(): any {
-        return this.audioElement;
-    }
+        if (this.config.logLevels == undefined) {
+            this.config.logLevels = {
+                [LogLevel.Information]: true,
+                [LogLevel.Warnning]: true,
+                [LogLevel.Debug]: true,
+            };
+        }
 
-    constructor(url: string) {
-        this.logger = new ConsoleLogger({
-            [LogLevel.Information]: true,
-            [LogLevel.Warnning]: true,
-            [LogLevel.Debug]: true,
-        });
-        this.callService = new WebRTCService(this.GetTrackHandler(), this.logger);
+        this.logger = new ConsoleLogger(this.config.logLevels);
+        this.eventService = new DefaultEventService(config.element);
+        this.callService = new WebRTCService(this.logger, this.eventService);
         this.cmdService = new DefaultCommandService(this.callService);
-        this.sessionService = new WebSocketService(url, this.cmdService, this.logger);
+        this.sessionService = new WebSocketService(url, this.cmdService, this.eventService, this.logger);
+
+        this.SetupEventDebug();
+
+        this.isActive = true;
     }
 
     async Call(id: string): Promise<void> {
-        await this.sessionService.Excecute({
+        if (!this.isActive) return;
+
+        await this.sessionService.Execute({
             Type: CommandTypes.Call,
             Protocol: Protocols.WebRTC,
             Mode: Modes.AdHoc,
@@ -47,6 +62,28 @@ export default class Telefono {
             Organization: '',
             AdHocId: id,
             Parameters: null
-        } as CallCommand)
+        } as CallCommand);
+    }
+
+    async Close(): Promise<void> {
+        if (!this.isActive) return;
+
+        await this.sessionService.Execute({
+            Type: CommandTypes.Disconnect,
+        });
+
+        this.isActive = false;
+    }
+
+    SetupEventDebug() {
+        let debug = (event: any) => this.logger.Debug('(!) Event:', event);
+
+        this.config.element?.addEventListener(Events.Connected, debug);
+        this.config.element?.addEventListener(Events.Ringing, debug);
+        this.config.element?.addEventListener(Events.Open, debug);
+        this.config.element?.addEventListener(Events.Stream, debug);
+        this.config.element?.addEventListener(Events.Track, debug);
+        this.config.element?.addEventListener(Events.Closed, debug);
+        this.config.element.addEventListener(Events.Disconnected, debug);
     }
 }

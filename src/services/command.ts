@@ -29,6 +29,8 @@ export class DefaultCommandService implements ICommandService {
                 break;
             case CommandTypes.Digit:
                 break;
+            case CommandTypes.Disconnect:
+                break;
             default:
         }
     }

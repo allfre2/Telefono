@@ -1,4 +1,6 @@
-export enum LogLevel {
+import { LibName } from "../config/settings";
+
+export const enum LogLevel {
     Information = 1,
     Warnning = 2,
     Error = 3,
@@ -20,25 +22,25 @@ export class ConsoleLogger implements ILogger {
 
     Info(...messages: any[]): void {
         if (this.logLevels[LogLevel.Information]) {
-            console.log(...messages);
+            console.info(`%c${LibName}:Info`, 'color: green; font-style: italic;', ...messages);
         }
     }
 
     Warn(...messages: any[]): void {
         if (this.logLevels[LogLevel.Warnning]) {
-            console.warn(...messages);
+            console.warn(`%c${LibName}:Warning`, 'color: yellow; font-weight: bold;', ...messages);
         }
     }
 
     Error(...messages: any[]): void {
         if (this.logLevels[LogLevel.Error] || this.logLevels[LogLevel.Debug]) {
-            console.error(...messages);
+            console.error(`%c${LibName}:Error`, 'color: red; font-weight: bold;', ...messages);
         }
     }
 
     Debug(...messages: any[]): void {
         if (this.logLevels[LogLevel.Debug]) {
-            console.debug(...messages);
+            console.debug(`%c${LibName}:Debug`, 'color: blue; font-weight: bold;', ...messages);
         }
     }
 }

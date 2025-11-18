@@ -1,10 +1,12 @@
+import { Events } from "../domain/event";
 import { ConfigurationMessage, SessionMessage } from "../domain/message"
 import { ILogger } from "../util/logger";
 import { Deserialize, Serialize } from "../util/serialization";
 import { ICommandService } from "./command";
+import { IEventPublisher } from "./event";
 
 export interface ISessionService {
-    Excecute(cmd: SessionMessage): Promise<void>;
+    Execute(cmd: SessionMessage): Promise<void>;
     Send(msg: SessionMessage): void;
 }
 
@@ -14,16 +16,18 @@ export class WebSocketService implements ISessionService {
     isConfigured: boolean = false;
     configuration: ConfigurationMessage;
     cmdService: ICommandService;
+    eventService: IEventPublisher;
     logger: ILogger;
 
-    constructor(endpoint: string, cmdService: ICommandService, logger: ILogger) {
+    constructor(endpoint: string, cmdService: ICommandService, eventService: IEventPublisher, logger: ILogger) {
         this.endpoint = endpoint;
         this.cmdService = cmdService;
+        this.eventService = eventService;
         this.logger = logger;
         this.InitWebSocket();
     }
 
-    async Excecute(cmd: SessionMessage): Promise<void> {
+    async Execute(cmd: SessionMessage): Promise<void> {
         await this.cmdService.Execute(cmd);
         this.Send(cmd);
     }
@@ -67,6 +71,7 @@ export class WebSocketService implements ISessionService {
             this.configuration = Deserialize<ConfigurationMessage>(event.data);
             this.cmdService.Configure(this.configuration);
             this.isConfigured = true;
+            this.eventService.Publish(Events.Connected, {});
             this.logger.Info("Received configuration:", this.configuration);
             return;
         }
@@ -89,5 +94,7 @@ export class WebSocketService implements ISessionService {
         } else {
             this.logger.Error('Connection died unexpectedly');
         }
+
+        this.eventService.Publish(Events.Disconnected, { event });
     }
 }

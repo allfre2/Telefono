@@ -9,6 +9,7 @@
     <script>
         document.addEventListener("DOMContentLoaded", function() {
             console.log(Telefono);
+            SubscribeToEvents(document);
         });
 
         function AddVisualizer(telefono) {
@@ -18,23 +19,120 @@
             return canvas;
         }
 
-        function InspectIncomingStream(telefono) {
-            let tracks = [];
-            for (let audio of document.querySelectorAll('audio')) {
-                if (audio.srcObject) {
-                    tracks.push(audio);
+        let audioActivityElement;
+
+        function CheckAudioActivity(stream) {
+                const audioContext = new (window.AudioContext/* || window.webkitAudioContext*/)();
+                const source = audioContext.createMediaStreamSource(stream);
+                const analyser = audioContext.createAnalyser();
+                source.connect(analyser);
+                analyser.fftSize = 256;
+
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                let self = this;
+                function update() {
+                    if (!audioActivityElement) {
+                        audioActivityElement = document.createElement('p');
+                        document.body.appendChild(audioActivityElement);
+                    }
+                    requestAnimationFrame(update);
+                    analyser.getByteFrequencyData(dataArray);
+
+                    // Calculate the average volume
+                    let sum = 0;
+                    for (let i = 0; i < bufferLength; i++) {
+                        sum += dataArray[i];
+                    }
+                    const averageVolume = sum / bufferLength;
+
+                    // A volume above a certain threshold (e.g., > 0 for some noise, a higher value for speech) indicates the mic is working.
+                    if (averageVolume > 0) {
+                        self.p.innerHTML = 'volume: ' + averageVolume;
+                        // You can add visual feedback to the user here (e.g., a volume bar)
+                    } else {
+                        self.p.innerHTML = 'microphone is open but silent.';
+                    }
                 }
+
+                update();
             }
-            // let tracks = [...][0].map(audio => audio.srcObject?.getTracks())
-            console.log(tracks);
-            let track = tracks.map(audio => audio.srcObject.getTracks())[0][0];
-            let p = document.createElement('pre');
-            document.body.appendChild(p);
-            setInterval(() => {
-                p.innerHTML = 'deliveredFrames: ' + track.stats.deliveredFrames;
-                p.innerHTML += ', deliveredFramesDuration: ' + track.stats.deliveredFramesDuration;
-            }, 1000);
-        }
+
+            let microphoneStream;
+            function SubscribeToEvents(element) {
+                element.addEventListener('Telefono:connected', function (event) {
+
+                });
+
+                element.addEventListener('Telefono:ringing', function (event) {
+                });
+
+                element.addEventListener('Telefono:open', function (event) {
+                });
+
+                element.addEventListener('Telefono:closed', function (event) {
+                });
+
+                element.addEventListener('Telefono:stream', function (event) {
+                    microphoneStream = event.detail.stream;
+                    let tracks = microphoneStream.getTracks();
+                    let el = document.createElement('p');
+                    document.body.appendChild(el);
+                    setInterval(() => {
+                        let str = '';
+                        for (let track of tracks) {
+                            str += '<br />id: ' + track.id + '<br /> ' +
+                            '<b>' + track.label + '</b><br />' +
+                            'deliveredFrames: ' + track.stats.deliveredFrames + '<br />' +
+                            'deliveredFramesDuration: ' + track.stats.deliveredFramesDuration/1000 + 's<br /><hr/>';
+                        }
+                        el.innerHTML = str;
+                    }, 1000);
+                });
+
+                let audios = [];
+                let trackEvents = [];
+                let details = [];
+                element.addEventListener('Telefono:track', function (event) {
+                    console.log(event.detail)
+                    let trackEvent = event.detail;
+                    trackEvents.push(trackEvent)
+                    audio = document.createElement('audio');
+                    document.body.appendChild(audio)
+                    audios.push(audio)
+                    
+                    audio.srcObject = trackEvent.streams[0] 
+                    audio.autoplay = true
+                    audio.controls = true
+
+                    let desc = document.createElement('p')
+                    document.body.appendChild(desc)
+                    details.push(desc)
+                    
+                    let track = trackEvent.track
+                    let senderTrack = trackEvent.transceiver?.sender.track
+                    let receiverTrack = trackEvent.transceiver?.receiver.track
+                    setInterval(() => {
+                        let str = '';
+                        str += '<br />id: ' + track?.id + '<br /> ' +
+                            '<b>label: ' + track?.label + '</b><br />' +
+                            'deliveredFrames: ' + track?.stats?.deliveredFrames + '<br />' +
+                            'deliveredFramesDuration: ' + track?.stats?.deliveredFramesDuration/100 + 's<br />' +
+                            '<b>RTCRtpTransceiver:</b><br />' +
+                            'sender: ' + senderTrack?.stats?.deliveredFrames + ' delivered, duration: ' + senderTrack?.stats?.deliveredFramesDuration/1000 + 's<br />' +
+                            'receiver: ' + receiverTrack?.stats?.deliveredFrames + ' delivered, duration: ' + receiverTrack?.stats?.deliveredFramesDuration/1000 + 's<br/>' +
+                            '<b>RTCPeerConnection:</b><br/>' +
+                            'ICE gathering state: ' + trackEvent.target.iceGatheringState + '<br />' +
+                            'ICE connection state: ' + trackEvent.target.iceConnectionState + '<br />' +
+                            'Signaling state: ' + trackEvent.target.signalingState
+                            + '<hr/>';
+                        desc.innerHTML = str;
+                    }, 1000)
+                });
+
+                element.addEventListener('Telefono:disconnected', function (event) {
+                });
+            }
     </script>
 </head>
 <body>
