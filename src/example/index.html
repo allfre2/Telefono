@@ -4,16 +4,41 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Telefono Library Example</title>
     <link rel="stylesheet" href="index.css">
-    <script src="../../dist/telefono.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/foobar404/wave.js/dist/bundle.js"></script>
+    <script src="../../dist/webpack/telefono.js"></script>
     <script>
         document.addEventListener("DOMContentLoaded", function() {
             console.log(Telefono);
-            console.log(Telefono.greet('friend'));
-            alert(Telefono.greet('friend'));
         });
+
+        function AddVisualizer(telefono) {
+            let canvas = document.querySelector("canvas");
+            let wave = new Wave(telefono.GetAudioElement(), canvas);
+            wave.addAnimation(new wave.animations.Wave());
+            return canvas;
+        }
+
+        function InspectIncomingStream(telefono) {
+            let tracks = [];
+            for (let audio of document.querySelectorAll('audio')) {
+                if (audio.srcObject) {
+                    tracks.push(audio);
+                }
+            }
+            // let tracks = [...][0].map(audio => audio.srcObject?.getTracks())
+            console.log(tracks);
+            let track = tracks.map(audio => audio.srcObject.getTracks())[0][0];
+            let p = document.createElement('pre');
+            document.body.appendChild(p);
+            setInterval(() => {
+                p.innerHTML = 'deliveredFrames: ' + track.stats.deliveredFrames;
+                p.innerHTML += ', deliveredFramesDuration: ' + track.stats.deliveredFramesDuration;
+            }, 1000);
+        }
     </script>
 </head>
 <body>
     <h1>Telefono Library Example</h1>
+    <canvas></canvas>
 </body>
 </html>

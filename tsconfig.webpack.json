@@ -1,8 +1,14 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    "baseUrl": ".",
     "module": "esnext",
-    "outDir": "./dist/browser"
+    "target": "esnext",
+    "lib": ["esnext", "dom"],
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "allowJs": true,
+    "outDir": "./dist/webpack",
   },
   "sourceMap": false,
   "declaration": false,
