@@ -1,5 +1,6 @@
 export interface IEventPublisher {
     Publish(event: string, data: any): void;
+    Consume(event: string, consumer: (data: any) => void): void;
 }
 
 export class DefaultEventService implements IEventPublisher {
@@ -15,5 +16,9 @@ export class DefaultEventService implements IEventPublisher {
             bubbles: true,
             cancelable: true
         }));
+    }
+
+    Consume(event: string, consumer: (data: any) => void): void {
+        this.element.addEventListener(event, consumer);
     }
 }

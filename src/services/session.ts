@@ -1,4 +1,4 @@
-import { Events } from "../domain/event";
+import { Events, CallEvents } from "../domain/event";
 import { ConfigurationMessage, SessionMessage } from "../domain/message"
 import { ILogger } from "../util/logger";
 import { Deserialize, Serialize } from "../util/serialization";
@@ -24,6 +24,7 @@ export class WebSocketService implements ISessionService {
         this.cmdService = cmdService;
         this.eventService = eventService;
         this.logger = logger;
+        this.InitEventHandlers();
         this.InitWebSocket();
     }
 
@@ -39,6 +40,12 @@ export class WebSocketService implements ISessionService {
         } else {
             this.logger.Debug('WebSocket is not open. Cannot send message.');
         }
+    }
+
+    private InitEventHandlers() {
+        this.eventService.Consume(CallEvents.Signaling, event => {
+            this.Send(event.detail.command);
+        });
     }
 
     private InitWebSocket(): void {

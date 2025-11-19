@@ -1,5 +1,6 @@
 import { Modes, Protocols } from "./domain/call";
 import { CallCommand, CommandTypes } from "./domain/command";
+import { NilUUID } from "./domain/constants";
 import { Events } from "./domain/event";
 import { ICallService, WebRTCService } from "./services/call";
 import { DefaultCommandService, ICommandService } from "./services/command";
@@ -58,7 +59,7 @@ export default class Telefono {
             Type: CommandTypes.Call,
             Protocol: Protocols.WebRTC,
             Mode: Modes.AdHoc,
-            Flow: '00000000-0000-0000-0000-000000000000', // Jesus Christ ...
+            Flow: NilUUID,
             Organization: '',
             AdHocId: id,
             Parameters: null

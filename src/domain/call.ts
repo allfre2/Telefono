@@ -8,4 +8,8 @@ export enum Modes {
     Agent = 'agent',
 }
 
-export class OngoingCall {}
+export class OngoingCall {
+    AdHocId: string;
+    SDPExchangeComplete: boolean;
+    IsEstablished: boolean;
+}

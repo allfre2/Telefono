@@ -9,3 +9,7 @@ export enum Events {
     Closed = `${LibName}:closed`,
     Disconnected = `${LibName}:disconnected`
 }
+
+export enum CallEvents {
+    Signaling = `call:signaling`,
+}

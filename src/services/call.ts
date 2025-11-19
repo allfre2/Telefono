@@ -1,7 +1,8 @@
-import { OngoingCall } from "../domain/call";
-import { CallCommand, HangUpCommand } from "../domain/command";
-import { Events } from "../domain/event";
-import { ConfigurationMessage } from "../domain/message";
+import { Modes, OngoingCall } from "../domain/call";
+import { CallCommand, CommandTypes, HangUpCommand } from "../domain/command";
+import { NilUUID } from "../domain/constants";
+import { CallEvents, Events } from "../domain/event";
+import { ConfigurationMessage, MessageTypes } from "../domain/message";
 import { ILogger } from "../util/logger";
 import { IEventPublisher } from "./event";
 
@@ -19,6 +20,7 @@ export class WebRTCService implements ICallService {
     currentCall: OngoingCall;
     logger: ILogger;
     eventService: IEventPublisher;
+    ICECandidates: RTCIceCandidate[] = [];
 
     constructor(logger: ILogger, eventService: IEventPublisher) {
         this.logger = logger;
@@ -27,6 +29,9 @@ export class WebRTCService implements ICallService {
 
     async InitCall(cmd: CallCommand): Promise<void> {
         this.currentCall = new OngoingCall();
+        this.currentCall.AdHocId = cmd.AdHocId;
+        this.currentCall.SDPExchangeComplete = false;
+        this.currentCall.IsEstablished = false;
         
         this.peerConnection = new RTCPeerConnection({
             iceServers: [{ urls: this.ICEServers }]
@@ -36,6 +41,7 @@ export class WebRTCService implements ICallService {
         this.peerConnection.oniceconnectionstatechange = event => { this.ICEConnectionStateChangeHandler(event) };
         this.peerConnection.onicecandidate = event => { this.ICECandidateHandler(event); }
         this.peerConnection.onicecandidateerror = event => { this.ICECandidateErrorHandler(event); }
+        this.peerConnection.onicegatheringstatechange = event => { this.ICEGatheringStateChangeHandler(event); };
 
         await this.SetupOutputTrack();
         await this.CreateOffer(cmd);
@@ -44,15 +50,24 @@ export class WebRTCService implements ICallService {
     }
 
     async EstablishCall(cmd: CallCommand): Promise<boolean> {
+        if (cmd.Parameters.Candidates) {
+            for (let candidate of cmd.Parameters.Candidates) {
+                await this.peerConnection.addIceCandidate(candidate);
+            }
+
+            return true;
+        }
+
         await this.peerConnection
             .setRemoteDescription(cmd.Parameters.SessionDescription);
 
+        this.currentCall.SDPExchangeComplete = true;
+        
         if (cmd.Parameters.IsOffer) {
             await this.CreateAnswer(cmd);
             return false;
         }
 
-        // finished signaling, call established
         return true;
     }
 
@@ -70,17 +85,69 @@ export class WebRTCService implements ICallService {
 
     private ICEConnectionStateChangeHandler(event: Event): void {
         this.logger.Info(this.peerConnection.iceConnectionState);
+        if (this.peerConnection.iceConnectionState == 'connected') {
+            this.eventService.Publish(CallEvents.Signaling, { command: this.GetCompletionCommand() });
+        }
+
+        // "new"
+        // "checking"
+        // "connected" <-
+        // "completed"
+        // "disconnected"
+        // "failed"
+        // "closed"
     }
 
     private ICECandidateHandler(event: RTCPeerConnectionIceEvent): void {
         this.logger.Debug("On ICE candidate callback", event.candidate);
         if (event.candidate === null) {
             this.logger.Debug("Final ICE candidate received");
+        } else {
+            this.ICECandidates.push(event.candidate);
+
+            if (this.currentCall.SDPExchangeComplete) {
+                this.eventService.Publish(CallEvents.Signaling, { command: this.GetICECandidateCommand() });
+                this.ICECandidates = [];
+            }
         }
     }
     
+    private GetICECandidateCommand(): CallCommand {
+        let cmd = new CallCommand();
+        cmd.Type = CommandTypes.Call;
+        cmd.Mode = Modes.AdHoc;
+        cmd.AdHocId = this.currentCall.AdHocId;
+        cmd.Flow = NilUUID;
+        cmd.Organization = '';
+        cmd.Parameters = {
+            Candidates: this.ICECandidates.slice()
+        };
+
+        return cmd;
+    }
+
+    private GetCompletionCommand(): CallCommand {
+        let cmd = new CallCommand();
+        cmd.Type = CommandTypes.Call;
+        cmd.Mode = Modes.AdHoc;
+        cmd.AdHocId = this.currentCall.AdHocId;
+        cmd.Flow = NilUUID;
+        cmd.Organization = '';
+        cmd.Parameters = {
+            IsComplete: true
+        };
+
+        return cmd;
+    }
+
     private ICECandidateErrorHandler(event: RTCPeerConnectionIceErrorEvent) {
         this.logger.Error("ICE Candidate error: ", event);
+    }
+
+    private ICEGatheringStateChangeHandler(event: Event): void {
+        if (this.peerConnection.iceGatheringState == 'complete') {
+            this.logger.Debug("ICE Gathering complete.");
+        }
     }
 
     private async SetupOutputTrack(): Promise<void> {
