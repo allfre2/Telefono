@@ -1,11 +1,10 @@
-import { CallCommand, CommandTypes } from "../domain/command";
+import { CallCommand, CommandTypes, HangUpCommand } from "../domain/command";
 import { ConfigurationMessage, SessionMessage } from "../domain/message";
-import { Deserialize, Serialize } from "../util/serialization";
 import { ICallService } from "./call";
 
 export interface ICommandService {
     Configure(config: ConfigurationMessage): void;
-    Execute(cmd: SessionMessage): Promise<void>;
+    Execute(cmd: SessionMessage): Promise<SessionMessage | null>;
     HandleResponse(response: SessionMessage): Promise<SessionMessage | null>;
 }
 
@@ -20,30 +19,33 @@ export class DefaultCommandService implements ICommandService {
         this.callService.Configure(config);
     }
 
-    async Execute(cmd: SessionMessage): Promise<void> {
+    async Execute(cmd: SessionMessage): Promise<SessionMessage | null> {
+        let response: SessionMessage | null = null;
+
         switch(cmd.Type) {
             case CommandTypes.Call:
-                await this.callService.InitCall(cmd as CallCommand);
+                response = await this.callService.InitCall(cmd as CallCommand);
                 break;
             case CommandTypes.HangUp:
+                await this.callService.EndCall(cmd as HangUpCommand);
                 break;
             case CommandTypes.Digit:
                 break;
             case CommandTypes.Disconnect:
+                response = cmd;
                 break;
             default:
         }
+
+        return response;
     }
 
     async HandleResponse(response: SessionMessage): Promise<SessionMessage | null> {
-        console.log("original response as session message:", response);
-        console.log("original response as call command:", response as CallCommand);
         switch(response.Type) {
             case CommandTypes.Call:
                 // If  it's adhoc ...
                 let cmd = response as CallCommand
                 if(!await this.callService.EstablishCall(cmd)) {
-                    console.log("establish call returned false", cmd);
                     return cmd;
                 }
                 break;

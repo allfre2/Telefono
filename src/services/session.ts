@@ -43,7 +43,7 @@ export class WebSocketService implements ISessionService {
     }
 
     private InitEventHandlers() {
-        this.eventService.Consume(CallEvents.Signaling, event => {
+        this.eventService.Subscribe(CallEvents.Signaling, event => {
             this.Send(event.detail.command);
         });
     }
@@ -95,7 +95,6 @@ export class WebSocketService implements ISessionService {
     }
 
     private HandleClose(event: CloseEvent) {
-        console.log('WebSocket connection closed:', event);
         if (event.wasClean) {
             this.logger.Debug(`Connection closed cleanly, code=${event.code}, reason=${event.reason}`);
         } else {

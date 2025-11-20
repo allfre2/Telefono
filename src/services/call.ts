@@ -1,15 +1,14 @@
 import { Modes, OngoingCall } from "../domain/call";
 import { CallCommand, CommandTypes, HangUpCommand } from "../domain/command";
-import { NilUUID } from "../domain/constants";
 import { CallEvents, Events } from "../domain/event";
-import { ConfigurationMessage, MessageTypes } from "../domain/message";
+import { ConfigurationMessage, MessageTypes, SessionMessage } from "../domain/message";
 import { ILogger } from "../util/logger";
 import { IEventPublisher } from "./event";
 
 export interface ICallService {
-    InitCall(cmd: CallCommand): Promise<void>;
+    InitCall(cmd: CallCommand): Promise<SessionMessage | null>;
     EstablishCall(cmd: CallCommand): Promise<boolean>;
-    EndCall(cmd: HangUpCommand): void;
+    EndCall(cmd: HangUpCommand): Promise<void>;
     HasActiveCall(): boolean;
     Configure(config: ConfigurationMessage): void;
 }
@@ -17,7 +16,7 @@ export interface ICallService {
 export class WebRTCService implements ICallService {
     ICEServers: string[];
     peerConnection: RTCPeerConnection;
-    currentCall: OngoingCall;
+    currentCall: OngoingCall | undefined;
     logger: ILogger;
     eventService: IEventPublisher;
     ICECandidates: RTCIceCandidate[] = [];
@@ -27,7 +26,7 @@ export class WebRTCService implements ICallService {
         this.eventService = eventService;
     }
 
-    async InitCall(cmd: CallCommand): Promise<void> {
+    async InitCall(cmd: CallCommand): Promise<SessionMessage | null> {
         this.currentCall = new OngoingCall();
         this.currentCall.AdHocId = cmd.AdHocId;
         this.currentCall.SDPExchangeComplete = false;
@@ -35,7 +34,7 @@ export class WebRTCService implements ICallService {
         
         this.peerConnection = new RTCPeerConnection({
             iceServers: [{ urls: this.ICEServers }]
-        });
+        }); 
 
         this.peerConnection.ontrack = event => { this.TrackHandler(event) };
         this.peerConnection.oniceconnectionstatechange = event => { this.ICEConnectionStateChangeHandler(event) };
@@ -47,6 +46,8 @@ export class WebRTCService implements ICallService {
         await this.CreateOffer(cmd);
 
         this.eventService.Publish(Events.Ringing, {});
+
+        return cmd;
     }
 
     async EstablishCall(cmd: CallCommand): Promise<boolean> {
@@ -61,7 +62,9 @@ export class WebRTCService implements ICallService {
         await this.peerConnection
             .setRemoteDescription(cmd.Parameters.SessionDescription);
 
-        this.currentCall.SDPExchangeComplete = true;
+        if (this.currentCall) {
+            this.currentCall.SDPExchangeComplete = true;
+        }
         
         if (cmd.Parameters.IsOffer) {
             await this.CreateAnswer(cmd);
@@ -71,23 +74,33 @@ export class WebRTCService implements ICallService {
         return true;
     }
 
-    EndCall(cmd: HangUpCommand): void {
-
+    async EndCall(cmd: HangUpCommand): Promise<void> {
+        await this.ReleaseResources();
+        this.currentCall = undefined;
+        this.peerConnection.close();
+        this.eventService.Publish(Events.Closed, {});
     }
 
     HasActiveCall(): boolean {
-        return !this.currentCall;
+        return !!this.currentCall;
     }
 
     Configure(config: ConfigurationMessage): void {
         this.ICEServers = config.Parameters.ICEServers;
     }
 
-    private ICEConnectionStateChangeHandler(event: Event): void {
+    private async ReleaseResources(): Promise<void> {
+        this.peerConnection.getSenders().forEach(sender => {
+            sender.track?.stop();
+        });
+
+        this.peerConnection.getReceivers().forEach(receiver => {
+            receiver.track?.stop();
+        });
+    }
+
+    private async ICEConnectionStateChangeHandler(event: Event): Promise<void> {
         this.logger.Info(this.peerConnection.iceConnectionState);
-        if (this.peerConnection.iceConnectionState == 'connected') {
-            this.eventService.Publish(CallEvents.Signaling, { command: this.GetCompletionCommand() });
-        }
 
         // "new"
         // "checking"
@@ -96,6 +109,16 @@ export class WebRTCService implements ICallService {
         // "disconnected"
         // "failed"
         // "closed"
+
+        if (this.peerConnection.iceConnectionState == 'connected') {
+            this.eventService.Publish(CallEvents.Signaling, { command: this.GetCompletionCommand() });
+            this.eventService.Publish(Events.Open, {});
+        }
+
+        if (this.peerConnection.iceConnectionState == 'disconnected') {
+            this.logger.Warn('Peer disconnected');
+            await this.EndCall(new CallCommand());
+        }
     }
 
     private ICECandidateHandler(event: RTCPeerConnectionIceEvent): void {
@@ -105,7 +128,7 @@ export class WebRTCService implements ICallService {
         } else {
             this.ICECandidates.push(event.candidate);
 
-            if (this.currentCall.SDPExchangeComplete) {
+            if (this.currentCall?.SDPExchangeComplete) {
                 this.eventService.Publish(CallEvents.Signaling, { command: this.GetICECandidateCommand() });
                 this.ICECandidates = [];
             }
@@ -116,9 +139,7 @@ export class WebRTCService implements ICallService {
         let cmd = new CallCommand();
         cmd.Type = CommandTypes.Call;
         cmd.Mode = Modes.AdHoc;
-        cmd.AdHocId = this.currentCall.AdHocId;
-        cmd.Flow = NilUUID;
-        cmd.Organization = '';
+        cmd.AdHocId = this.currentCall?.AdHocId || '';
         cmd.Parameters = {
             Candidates: this.ICECandidates.slice()
         };
@@ -130,9 +151,7 @@ export class WebRTCService implements ICallService {
         let cmd = new CallCommand();
         cmd.Type = CommandTypes.Call;
         cmd.Mode = Modes.AdHoc;
-        cmd.AdHocId = this.currentCall.AdHocId;
-        cmd.Flow = NilUUID;
-        cmd.Organization = '';
+        cmd.AdHocId = this.currentCall?.AdHocId || '';
         cmd.Parameters = {
             IsComplete: true
         };
@@ -141,7 +160,7 @@ export class WebRTCService implements ICallService {
     }
 
     private ICECandidateErrorHandler(event: RTCPeerConnectionIceErrorEvent) {
-        this.logger.Error("ICE Candidate error: ", event);
+        this.logger.Warn("ICE Candidate error: ", event);
     }
 
     private ICEGatheringStateChangeHandler(event: Event): void {

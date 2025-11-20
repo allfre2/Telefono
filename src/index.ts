@@ -1,7 +1,7 @@
+import { DefaultApiVersion } from "./config/settings";
 import { Modes, Protocols } from "./domain/call";
 import { CallCommand, CommandTypes } from "./domain/command";
 import { NilUUID } from "./domain/constants";
-import { Events } from "./domain/event";
 import { ICallService, WebRTCService } from "./services/call";
 import { DefaultCommandService, ICommandService } from "./services/command";
 import { DefaultEventService, IEventPublisher } from "./services/event";
@@ -16,12 +16,16 @@ export enum Log {
 }
 
 export class Config {
-    element: any;
-    logLevels: any;
+    Host: string;
+    Port: number;
+    Element?: any;
+    Debug?: boolean;
+    EnableSSL?: boolean;
+    ApiVersion?: string;
 }
 
 export default class Telefono {
-    config: Config;
+    options: Config;
     eventService: IEventPublisher;
     callService: ICallService;
     cmdService: ICommandService;
@@ -30,26 +34,9 @@ export default class Telefono {
     audioElement: any;
     isActive: boolean;
 
-    constructor(url: string, config: Config) {
-        this.config = config;
-
-        if (this.config.logLevels == undefined) {
-            this.config.logLevels = {
-                [LogLevel.Information]: true,
-                [LogLevel.Warnning]: true,
-                [LogLevel.Debug]: true,
-            };
-        }
-
-        this.logger = new ConsoleLogger(this.config.logLevels);
-        this.eventService = new DefaultEventService(config.element);
-        this.callService = new WebRTCService(this.logger, this.eventService);
-        this.cmdService = new DefaultCommandService(this.callService);
-        this.sessionService = new WebSocketService(url, this.cmdService, this.eventService, this.logger);
-
-        this.SetupEventDebug();
-
-        this.isActive = true;
+    constructor(options: Config) {
+        this.options = options;
+        this.InitTelefono();
     }
 
     async Call(id: string): Promise<void> {
@@ -66,6 +53,14 @@ export default class Telefono {
         } as CallCommand);
     }
 
+    async HangUp(): Promise<void> {
+        if (!this.callService.HasActiveCall()) return;
+
+        await this.sessionService.Execute({
+            Type: CommandTypes.HangUp
+        });
+    }
+
     async Close(): Promise<void> {
         if (!this.isActive) return;
 
@@ -76,15 +71,32 @@ export default class Telefono {
         this.isActive = false;
     }
 
-    SetupEventDebug() {
-        let debug = (event: any) => this.logger.Debug('(!) Event:', event);
+    async Destroy(): Promise<void> {
+        await this.HangUp();
+        await this.Close();
+    }
 
-        this.config.element?.addEventListener(Events.Connected, debug);
-        this.config.element?.addEventListener(Events.Ringing, debug);
-        this.config.element?.addEventListener(Events.Open, debug);
-        this.config.element?.addEventListener(Events.Stream, debug);
-        this.config.element?.addEventListener(Events.Track, debug);
-        this.config.element?.addEventListener(Events.Closed, debug);
-        this.config.element.addEventListener(Events.Disconnected, debug);
+    private InitTelefono() {
+        let logLevels: any = {
+            [LogLevel.Information]: true,
+            [LogLevel.Warnning]: true,
+            [LogLevel.Error]: true,
+        };
+
+        logLevels[LogLevel.Debug] = this.options.Debug;
+
+        this.logger = new ConsoleLogger(logLevels);
+        this.eventService = new DefaultEventService(this.options.Element, this.logger);
+        this.callService = new WebRTCService(this.logger, this.eventService);
+        this.cmdService = new DefaultCommandService(this.callService);
+        this.sessionService = new WebSocketService(this.GetSessionUrl(), this.cmdService, this.eventService, this.logger);
+
+        this.isActive = true;
+    }
+
+    private GetSessionUrl(): string {
+        return `${this.options.EnableSSL ? 'wss' : 'ws'}://` + 
+        `${this.options.Host}:${this.options.Port}` +
+        `/api/v${this.options.ApiVersion || DefaultApiVersion }/session`;
     }
 }

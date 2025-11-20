@@ -7,6 +7,13 @@
     <script src="https://cdn.jsdelivr.net/gh/foobar404/wave.js/dist/bundle.js"></script>
     <script src="../../dist/webpack/telefono.js"></script>
     <script>
+        let options = {
+            Host: 'localhost',
+            Port: 1234,
+            Element: document,
+            Debug: true
+        };
+
         document.addEventListener("DOMContentLoaded", function() {
             console.log(Telefono);
             SubscribeToEvents(document);
