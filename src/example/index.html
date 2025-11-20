@@ -12,127 +12,114 @@
             SubscribeToEvents(document);
         });
 
-        function AddVisualizer(telefono) {
-            let canvas = document.querySelector("canvas");
-            let wave = new Wave(telefono.GetAudioElement(), canvas);
-            wave.addAnimation(new wave.animations.Wave());
-            return canvas;
+        function AddVisualizer(audio) {
+            const audioCtx = new AudioContext();
+            const source = audioCtx.createMediaStreamSource(audio.srcObject);
+            const analyser = audioCtx.createAnalyser();
+            source.connect(analyser);
+
+            // Setup canvas
+            const canvas = document.createElement("canvas");
+            canvas.width = 200;
+            canvas.height = 200;
+            document.body.appendChild(canvas);
+            const ctx = canvas.getContext("2d");
+
+            // Draw waveform
+            function draw() {
+                requestAnimationFrame(draw);
+                const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                analyser.getByteTimeDomainData(dataArray);
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.beginPath();
+                for (let i = 0; i < dataArray.length; i++) {
+                    const x = (i / dataArray.length) * canvas.width;
+                    const y = (dataArray[i] / 255) * canvas.height;
+                    ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            }
+
+            draw();
         }
 
-        let audioActivityElement;
+        function SubscribeToEvents(element) {
+            element.addEventListener('Telefono:connected', function (event) {
 
-        function CheckAudioActivity(stream) {
-                const audioContext = new (window.AudioContext/* || window.webkitAudioContext*/)();
-                const source = audioContext.createMediaStreamSource(stream);
-                const analyser = audioContext.createAnalyser();
-                source.connect(analyser);
-                analyser.fftSize = 256;
+            });
 
-                const bufferLength = analyser.frequencyBinCount;
-                const dataArray = new Uint8Array(bufferLength);
-                let self = this;
-                function update() {
-                    if (!audioActivityElement) {
-                        audioActivityElement = document.createElement('p');
-                        document.body.appendChild(audioActivityElement);
+            element.addEventListener('Telefono:ringing', function (event) {
+            });
+
+            element.addEventListener('Telefono:open', function (event) {
+            });
+
+            element.addEventListener('Telefono:closed', function (event) {
+            });
+
+            element.addEventListener('Telefono:stream', function (event) {
+                let microphoneStream = event.detail.stream;
+                let tracks = microphoneStream.getTracks();
+                let el = document.createElement('p');
+                document.body.appendChild(el);
+                setInterval(() => {
+                    let str = '';
+                    for (let track of tracks) {
+                        str += '<br />id: ' + track.id + '<br /> ' +
+                        '<b>' + track.label + '</b><br />' +
+                        'deliveredFrames: ' + track.stats.deliveredFrames + '<br />' +
+                        'deliveredFramesDuration: ' + track.stats.deliveredFramesDuration/1000 + 's<br /><hr/>';
                     }
-                    requestAnimationFrame(update);
-                    analyser.getByteFrequencyData(dataArray);
+                    el.innerHTML = str;
+                }, 1000);
+            });
 
-                    // Calculate the average volume
-                    let sum = 0;
-                    for (let i = 0; i < bufferLength; i++) {
-                        sum += dataArray[i];
-                    }
-                    const averageVolume = sum / bufferLength;
+            let audios = [];
+            let trackEvents = [];
+            let details = [];
+            element.addEventListener('Telefono:track', function (event) {
+                console.log(event.detail)
+                let trackEvent = event.detail;
+                trackEvents.push(trackEvent)
+                audio = document.createElement('audio');
+                document.body.appendChild(audio)
+                audios.push(audio)
+                
+                audio.srcObject = trackEvent.streams[0] 
+                audio.autoplay = true
+                audio.controls = true
 
-                    // A volume above a certain threshold (e.g., > 0 for some noise, a higher value for speech) indicates the mic is working.
-                    if (averageVolume > 0) {
-                        self.p.innerHTML = 'volume: ' + averageVolume;
-                        // You can add visual feedback to the user here (e.g., a volume bar)
-                    } else {
-                        self.p.innerHTML = 'microphone is open but silent.';
-                    }
-                }
+                AddVisualizer(audio);
 
-                update();
-            }
+                let desc = document.createElement('p')
+                document.body.appendChild(desc)
+                details.push(desc)
+                
+                let track = trackEvent.track
+                let senderTrack = trackEvent.transceiver?.sender.track
+                let receiverTrack = trackEvent.transceiver?.receiver.track
+                setInterval(() => {
+                    let str = '';
+                    str += '<br />id: ' + track?.id + '<br /> ' +
+                        '<b>label: ' + track?.label + '</b><br />' +
+                        'deliveredFrames: ' + track?.stats?.deliveredFrames + '<br />' +
+                        'deliveredFramesDuration: ' + track?.stats?.deliveredFramesDuration/100 + 's<br />' +
+                        '<b>RTCRtpTransceiver:</b><br />' +
+                        'sender: ' + senderTrack?.stats?.deliveredFrames + ' delivered, duration: ' + senderTrack?.stats?.deliveredFramesDuration/1000 + 's<br />' +
+                        'receiver: ' + receiverTrack?.stats?.deliveredFrames + ' delivered, duration: ' + receiverTrack?.stats?.deliveredFramesDuration/1000 + 's<br/>' +
+                        '<b>RTCPeerConnection:</b><br/>' +
+                        'ICE gathering state: ' + trackEvent.target.iceGatheringState + '<br />' +
+                        'ICE connection state: ' + trackEvent.target.iceConnectionState + '<br />' +
+                        'Signaling state: ' + trackEvent.target.signalingState
+                        + '<hr/>';
+                    desc.innerHTML = str;
+                }, 1000)
+            });
 
-            let microphoneStream;
-            function SubscribeToEvents(element) {
-                element.addEventListener('Telefono:connected', function (event) {
-
-                });
-
-                element.addEventListener('Telefono:ringing', function (event) {
-                });
-
-                element.addEventListener('Telefono:open', function (event) {
-                });
-
-                element.addEventListener('Telefono:closed', function (event) {
-                });
-
-                element.addEventListener('Telefono:stream', function (event) {
-                    microphoneStream = event.detail.stream;
-                    let tracks = microphoneStream.getTracks();
-                    let el = document.createElement('p');
-                    document.body.appendChild(el);
-                    setInterval(() => {
-                        let str = '';
-                        for (let track of tracks) {
-                            str += '<br />id: ' + track.id + '<br /> ' +
-                            '<b>' + track.label + '</b><br />' +
-                            'deliveredFrames: ' + track.stats.deliveredFrames + '<br />' +
-                            'deliveredFramesDuration: ' + track.stats.deliveredFramesDuration/1000 + 's<br /><hr/>';
-                        }
-                        el.innerHTML = str;
-                    }, 1000);
-                });
-
-                let audios = [];
-                let trackEvents = [];
-                let details = [];
-                element.addEventListener('Telefono:track', function (event) {
-                    console.log(event.detail)
-                    let trackEvent = event.detail;
-                    trackEvents.push(trackEvent)
-                    audio = document.createElement('audio');
-                    document.body.appendChild(audio)
-                    audios.push(audio)
-                    
-                    audio.srcObject = trackEvent.streams[0] 
-                    audio.autoplay = true
-                    audio.controls = true
-
-                    let desc = document.createElement('p')
-                    document.body.appendChild(desc)
-                    details.push(desc)
-                    
-                    let track = trackEvent.track
-                    let senderTrack = trackEvent.transceiver?.sender.track
-                    let receiverTrack = trackEvent.transceiver?.receiver.track
-                    setInterval(() => {
-                        let str = '';
-                        str += '<br />id: ' + track?.id + '<br /> ' +
-                            '<b>label: ' + track?.label + '</b><br />' +
-                            'deliveredFrames: ' + track?.stats?.deliveredFrames + '<br />' +
-                            'deliveredFramesDuration: ' + track?.stats?.deliveredFramesDuration/100 + 's<br />' +
-                            '<b>RTCRtpTransceiver:</b><br />' +
-                            'sender: ' + senderTrack?.stats?.deliveredFrames + ' delivered, duration: ' + senderTrack?.stats?.deliveredFramesDuration/1000 + 's<br />' +
-                            'receiver: ' + receiverTrack?.stats?.deliveredFrames + ' delivered, duration: ' + receiverTrack?.stats?.deliveredFramesDuration/1000 + 's<br/>' +
-                            '<b>RTCPeerConnection:</b><br/>' +
-                            'ICE gathering state: ' + trackEvent.target.iceGatheringState + '<br />' +
-                            'ICE connection state: ' + trackEvent.target.iceConnectionState + '<br />' +
-                            'Signaling state: ' + trackEvent.target.signalingState
-                            + '<hr/>';
-                        desc.innerHTML = str;
-                    }, 1000)
-                });
-
-                element.addEventListener('Telefono:disconnected', function (event) {
-                });
-            }
+            element.addEventListener('Telefono:disconnected', function (event) {
+            });
+        }
     </script>
 </head>
 <body>
