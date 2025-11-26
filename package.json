@@ -26,6 +26,7 @@
     "build": "npm run build:cjs && npm run build:esm && npm run webpack",
     "clean": "rm -rf dist",
     "purge": "rm -rf dist && rm -rf node_modules && rm -rf package-lock.json",
+    "prepare": "npm run build",
     "prepack": "npm run build"
   },
   "keywords": [],
@@ -33,11 +34,7 @@
   "license": "",
   "type": "module",
   "devDependencies": {
-    "babel-loader": "^10.0.0",
-    "browserify": "^17.0.1",
-    "nodemon": "^3.1.11",
     "ts-loader": "^9.5.4",
-    "tsify": "^5.0.4",
     "typescript": "^5.9.3",
     "webpack": "^5.102.1",
     "webpack-cli": "^6.0.1"
