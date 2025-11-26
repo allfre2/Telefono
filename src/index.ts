@@ -1,4 +1,4 @@
-import { DefaultApiVersion } from "./config/settings";
+import { Config, DefaultApiVersion } from "./config/settings";
 import { Modes, Protocols } from "./domain/call";
 import { CallCommand, CommandTypes } from "./domain/command";
 import { NilUUID } from "./domain/constants";
@@ -8,21 +8,8 @@ import { DefaultEventService, IEventPublisher } from "./services/event";
 import { ISessionService, WebSocketService } from "./services/session";
 import { ConsoleLogger, ILogger, LogLevel } from "./util/logger";
 
-export enum Log {
-    Information = LogLevel.Information,
-    Warnning = LogLevel.Warnning,
-    Error = LogLevel.Error,
-    Debug = LogLevel.Debug,
-}
-
-export class Config {
-    Host: string;
-    Port: number;
-    Element?: any;
-    Debug?: boolean;
-    EnableSSL?: boolean;
-    ApiVersion?: string;
-}
+export { Config } from './config/settings'
+export { Events } from './domain/event'
 
 export default class Telefono {
     options: Config;
