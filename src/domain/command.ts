@@ -13,14 +13,12 @@ export class DigitCommand extends SessionMessage {
 
 export class CallCommand extends SessionMessage {
     Mode: string;
-    Organization: string;
-    Flow: string;
     AdHocId: string;
     Parameters: any
 }
 
 export class HangUpCommand extends SessionMessage {
-
+    AdHocId: string;
 }
 
 export class DisconnectCommand extends SessionMessage {

@@ -1,6 +1,6 @@
 import { Config, DefaultApiVersion } from "./config/settings";
 import { Modes, Protocols } from "./domain/call";
-import { CallCommand, CommandTypes } from "./domain/command";
+import { CallCommand, CommandTypes, HangUpCommand } from "./domain/command";
 import { NilUUID } from "./domain/constants";
 import { ICallService, WebRTCService } from "./services/call";
 import { DefaultCommandService, ICommandService } from "./services/command";
@@ -33,8 +33,6 @@ export default class Telefono {
             Type: CommandTypes.Call,
             Protocol: Protocols.WebRTC,
             Mode: Modes.AdHoc,
-            Flow: NilUUID,
-            Organization: '',
             AdHocId: id,
             Parameters: null
         } as CallCommand);
@@ -44,8 +42,9 @@ export default class Telefono {
         if (!this.callService.HasActiveCall()) return;
 
         await this.sessionService.Execute({
-            Type: CommandTypes.HangUp
-        });
+            Type: CommandTypes.HangUp,
+            AdHocId: this.callService.GetCurrentCall().AdHocId,
+        } as HangUpCommand);
     }
 
     async Close(): Promise<void> {

@@ -28,6 +28,7 @@ export class DefaultCommandService implements ICommandService {
                 break;
             case CommandTypes.HangUp:
                 await this.callService.EndCall(cmd as HangUpCommand);
+                response = cmd as HangUpCommand;
                 break;
             case CommandTypes.Digit:
                 break;
@@ -43,11 +44,13 @@ export class DefaultCommandService implements ICommandService {
     async HandleResponse(response: SessionMessage): Promise<SessionMessage | null> {
         switch(response.Type) {
             case CommandTypes.Call:
-                // If  it's adhoc ...
                 let cmd = response as CallCommand
                 if(!await this.callService.EstablishCall(cmd)) {
                     return cmd;
                 }
+                break;
+            case CommandTypes.HangUp:
+                this.callService.EndCall(response as HangUpCommand);
                 break;
             default:
         }

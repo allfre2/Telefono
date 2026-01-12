@@ -29,8 +29,10 @@ export class WebSocketService implements ISessionService {
     }
 
     async Execute(cmd: SessionMessage): Promise<void> {
-        await this.cmdService.Execute(cmd);
-        this.Send(cmd);
+        let response = await this.cmdService.Execute(cmd);
+        if (response) {
+            this.Send(response);
+        }
     }
 
     Send(msg: SessionMessage): void {

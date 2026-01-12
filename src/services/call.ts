@@ -10,6 +10,7 @@ export interface ICallService {
     EstablishCall(cmd: CallCommand): Promise<boolean>;
     EndCall(cmd: HangUpCommand): Promise<void>;
     HasActiveCall(): boolean;
+    GetCurrentCall(): OngoingCall;
     Configure(config: ConfigurationMessage): void;
 }
 
@@ -83,6 +84,10 @@ export class WebRTCService implements ICallService {
 
     HasActiveCall(): boolean {
         return !!this.currentCall;
+    }
+
+    GetCurrentCall(): OngoingCall {
+        return this.currentCall!;
     }
 
     Configure(config: ConfigurationMessage): void {
